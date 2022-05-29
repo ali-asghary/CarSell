@@ -17,7 +17,7 @@ class CreateAuctionBidsTable extends Migration
             $table->id();
             $table->integer('auctionid');
             $table->foreign('auctionid')->references('id')->on('auction_infos');
-            $table->string('maxbid');
+            $table->string('bidprice');
             $table->string('bidtime');
             $table->integer('userid');
             $table->foreign('userid')->references('id')->on('users');

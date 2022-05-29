@@ -6,6 +6,7 @@ use App\Http\Controllers\Controller;
 use App\Models\ActionCost;
 use App\Models\AuctionBid;
 use App\Models\AuctionClaimInfo;
+use App\Models\AuctionDocument;
 use App\Models\AuctionInfo;
 use App\Models\AuctionUser;
 use App\Models\User;
@@ -61,7 +62,7 @@ class AuctionCarController extends Controller
                 $this->VIPJoinToAuction($request);
             }
             else {
-                $payPrice = ActionCost::where('title','like','Sample')->first();
+                $payPrice = ActionCost::where('title','like','example')->first();
                 if ($request->input('paytype') == 2) {
                     //// Send Request To Payment API ////
                     $paymentResult = 1;
@@ -90,49 +91,76 @@ class AuctionCarController extends Controller
         }
     }
 
-    private function AutoAuctionBid($auctionid, $auctionbidid) {
-        $auctionbid = AuctionBid::where('id',$auctionbidid)->first();
+    private function AutoAuctionBid($auctionid) {
+        $auctionbid = AuctionBid::where('auctionid',$auctionid)->orderBy('bidprice','DESC')->first();
 
         $autoBids = AuctionUser::where('auctionid',$auctionid)->where('auto_bid',1)->orderBy('id','ASC')->get();
 
         foreach ($autoBids as $data) {
-            if ($auctionbid->maxbid+$data->auto_bid_value < $data->maxbid) {
-                $auctionbid->maxbid = $auctionbid->maxbid+$data->auto_bid_value;
-                $auctionbid->bidtime = date('H:i:s');
-                $auctionbid->userid = $data->userid;
+            if ($auctionbid->bidprice+$data->auto_bid_value <= $data->maxbid) {
+                $TempBid = AuctionBid::where('auctionid',$auctionid)->where('userid',$data->userid)->first();
+                if (count($TempBid) != 0) {
+                    $TempBid->bidprice = $auctionbid->bidprice+$data->auto_bid_value;
+                    $TempBid->bidtime = date('H:i:s');
 
-                $auctionbid->save();
+                    $TempBid->save();
+                }
+                else {
+                    $newauctionbid = new AuctionBid();
+
+                    $newauctionbid->auctionid = $auctionid;
+                    $newauctionbid->bidprice = $auctionbid->bidprice+$data->auto_bid_value;
+                    $newauctionbid->bidtime = date('H:i:s');
+                    $newauctionbid->userid = $data->userid;
+
+                    $newauctionbid->save();
+                }
             }
         }
     }
 
     public function AuctionBid(Request $request) {
         try {
-            $auctionbid = AuctionBid::where('auctionid',$request->input('auctionId'))->first();
+            $auctionbid = AuctionBid::where('auctionid',$request->input('auctionId'))->where('userid',Auth::user()->id)->first();
 
             if (count($auctionbid) != 0 ) {
-                if ($auctionbid->maxbid < $request->input('bidValue')) {
-                    $auctionbid->maxbid = $request->input('bidValue');
+                if ($auctionbid->bidprice < $request->input('bidValue')) {
+                    $auctionbid->bidprice = $request->input('bidValue');
                     $auctionbid->bidtime = date('H:i:s');
-                    $auctionbid->userid = Auth::user()->id;
 
                     $auctionbid->save();
                 }
-
-                $this->AutoAuctionBid($request->input('auctionId'), $auctionbid->id);
             }
             else {
-                $newauctionbid = new AuctionBid();
+                $existauctionbid = AuctionBid::where('auctionid',$request->input('auctionId'))->orderBy('bidprice','DESC')->first();
 
-                $newauctionbid->auctionid = $request->input('auctionId');
-                $newauctionbid->maxbid = $request->input('bidValue');
-                $newauctionbid->bidtime = date('H:i:s');
-                $newauctionbid->userid = Auth::user()->id;
+                if (count($existauctionbid) != 0) {
+                    if ($existauctionbid->bidprice < $request->input('bidValue')) {
+                        $newauctionbid = new AuctionBid();
 
-                $newauctionbid->save();
+                        $newauctionbid->auctionid = $request->input('auctionId');
+                        $newauctionbid->bidprice = $request->input('bidValue');
+                        $newauctionbid->bidtime = date('H:i:s');
+                        $newauctionbid->userid = Auth::user()->id;
 
-                $this->AutoAuctionBid($request->input('auctionId'), $newauctionbid->id);
+                        $newauctionbid->save();
+                    } else {
+                        return response(["status" => 400, "message" => "Your Bid Is Low !!"]);
+                    }
+                }
+                else {
+                    $newauctionbid = new AuctionBid();
+
+                    $newauctionbid->auctionid = $request->input('auctionId');
+                    $newauctionbid->bidprice = $request->input('bidValue');
+                    $newauctionbid->bidtime = date('H:i:s');
+                    $newauctionbid->userid = Auth::user()->id;
+
+                    $newauctionbid->save();
+                }
             }
+
+            $this->AutoAuctionBid($request->input('auctionId'));
 
             return response(["status" => 200, "data" => $auctionbid->userid]);
         }
@@ -146,6 +174,80 @@ class AuctionCarController extends Controller
             $auctionBid = AuctionBid::where('auctionid',$request->input('auctionId'))->first();
 
             return response(["status" => 20, "message" => "Last Auction Bid !!" ,"data" => $auctionBid]);
+        }
+        catch (\Exception $e) {
+            return response(["status" => 400, "message" => $e->getMessage()]);
+        }
+    }
+
+    public function SellerSendAuctionDocument(Request $request) {
+        try {
+            foreach ($request->input('documents') as $document) {
+                if (file_exists(storage_path('app/AuctionDocuments') . '/' . $document->getClientOriginalName())) {
+                    $AuctionDocumentName = Auth::user()->id . $document->getClientOriginalName();
+                } else {
+                    $AuctionDocumentName = $document->getClientOriginalName();
+                }
+                $document->storeAs('AuctionDocuments', $AuctionDocumentName);
+
+                $auctionDocument = new AuctionDocument();
+
+                $auctionDocument->auctioninfoid = $request->input('auctioninfoid');
+                $auctionDocument->fileaddress = $AuctionDocumentName;
+                $auctionDocument->sideflag = 1;
+
+                $auctionDocument->save();
+            }
+
+            return response(["status" => 200, "message" => "Documents Uploaded Successfully !!"]);
+        }
+        catch (\Exception $e) {
+            return response(["status" => 400, "message" => $e->getMessage()]);
+        }
+    }
+
+    public function BuyerSendAuctionDocument(Request $request) {
+        try {
+            foreach ($request->input('documents') as $document) {
+                if (file_exists(storage_path('app/AuctionDocuments') . '/' . $document->getClientOriginalName())) {
+                    $AuctionDocumentName = Auth::user()->id . $document->getClientOriginalName();
+                } else {
+                    $AuctionDocumentName = $document->getClientOriginalName();
+                }
+                $document->storeAs('AuctionDocuments', $AuctionDocumentName);
+
+                $auctionDocument = new AuctionDocument();
+
+                $auctionDocument->auctioninfoid = $request->input('auctioninfoid');
+                $auctionDocument->fileaddress = $AuctionDocumentName;
+                $auctionDocument->sideflag = 2;
+
+                $auctionDocument->save();
+            }
+
+            return response(["status" => 200, "message" => "Documents Uploaded Successfully !!"]);
+        }
+        catch (\Exception $e) {
+            return response(["status" => 400, "message" => $e->getMessage()]);
+        }
+    }
+
+    public function AuctionUnsuccessfully(Request $request) {
+        try {
+            AuctionInfo::where('id',$request->input('auctioninfoid'))->update(["status" => 2]);
+
+            return response(["status" => 200, "message" => "Auction Closed With Error !!"]);
+        }
+        catch (\Exception $e) {
+            return response(["status" => 400, "message" => $e->getMessage()]);
+        }
+    }
+
+    public function AuctionSuccessfully(Request $request) {
+        try {
+            AuctionInfo::where('id',$request->input('auctioninfoid'))->update(["status" => 1]);
+
+            return response(["status" => 200, "message" => "Auction Closed With Success !!"]);
         }
         catch (\Exception $e) {
             return response(["status" => 400, "message" => $e->getMessage()]);

@@ -4,7 +4,7 @@ use Illuminate\Database\Migrations\Migration;
 use Illuminate\Database\Schema\Blueprint;
 use Illuminate\Support\Facades\Schema;
 
-class CreateCarsTable extends Migration
+class CreateCarTradeInsTable extends Migration
 {
     /**
      * Run the migrations.
@@ -13,11 +13,15 @@ class CreateCarsTable extends Migration
      */
     public function up()
     {
-        Schema::create('cars', function (Blueprint $table) {
+        Schema::create('car_trade_ins', function (Blueprint $table) {
             $table->id();
-            $table->string('price');
-            $table->boolean('discounttype');
-            $table->string('discount');
+            $table->integer('carid');
+            $table->foreign('carid')->references('id')->on('cars');
+            $table->string('name');
+            $table->string('email');
+            $table->string('phone');
+            $table->string('subject');
+            $table->text('message');
             $table->integer('make');
             $table->foreign('make')->references('id')->on('car_makes');
             $table->integer('model');
@@ -41,11 +45,6 @@ class CreateCarsTable extends Migration
             $table->foreign('accident')->references('id')->on('car_accidents');
             $table->integer('door');
             $table->string('vinnumber');
-            $table->text('description');
-            $table->boolean('auction')->default(0);// 0 = normal sell, 1 = auction sell
-            $table->integer('userid');
-            $table->foreign('userid')->references('id')->on('users');
-            $table->boolean('active')->default(1);
             $table->timestamps();
         });
     }
@@ -57,6 +56,6 @@ class CreateCarsTable extends Migration
      */
     public function down()
     {
-        Schema::dropIfExists('cars');
+        Schema::dropIfExists('car_trade_ins');
     }
 }

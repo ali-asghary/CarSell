@@ -26,12 +26,17 @@ Route::get('/deleteCar/{carid}', [CarController::class, 'DeleteCar'])->where('ca
 Route::get('/editCar/{carid}', [CarController::class, 'EditCar'])->where('carid', '[0-9]+');
 Route::post('/updateCar', [CarController::class, 'UpdateCar']);
 Route::post('/activeCar', [CarController::class, 'ActiveCar']);
+Route::post('/searchCar', [CarController::class, 'SearchCar']);
 ///////////////////// CarController Route End /////////////////////
 
 ///////////////////// AuctionCarController Route Start /////////////////////
 Route::post('/joinToAuction', [AuctionCarController::class, 'JoinToAuction']);
 Route::post('/auctionBid', [AuctionCarController::class, 'AuctionBid']);
 Route::post('/getCurrentAuctionBid', [AuctionCarController::class, 'GetCurrentAuctionBid']);
+Route::post('/sellerSendAuctionDocument', [AuctionCarController::class, 'SellerSendAuctionDocument']);
+Route::post('/buyerSendAuctionDocument', [AuctionCarController::class, 'BuyerSendAuctionDocument']);
+Route::post('/auctionUnsuccessfully', [AuctionCarController::class, 'AuctionUnsuccessfully']);
+Route::post('/auctionSuccessfully', [AuctionCarController::class, 'AuctionSuccessfully']);
 ///////////////////// AuctionCarController Route End /////////////////////
 
 ///////////////////// AuctionClaimController Route Start /////////////////////
@@ -40,6 +45,7 @@ Route::post('/setAuctionClaim', [AuctionClaimController::class, 'SetAuctionClaim
 
 ///////////////////// SellCarController Route Start /////////////////////
 Route::post('/buyerSendRequestToSeller', [SellCarController::class, 'BuyerSendRequestToSeller']);
+Route::post('/buyerTradeInWithSeller', [SellCarController::class, 'BuyerTradeInWithSeller']);
 Route::post('/sellerGetRequests', [SellCarController::class, 'SellerGetRequests']);
 ///////////////////// SellCarController Route End /////////////////////
 

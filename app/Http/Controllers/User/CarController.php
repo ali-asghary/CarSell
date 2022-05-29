@@ -3,6 +3,7 @@
 namespace App\Http\Controllers\User;
 
 use App\Http\Controllers\Controller;
+use App\Models\ActionCost;
 use App\Models\AuctionInfo;
 use App\Models\Car;
 use App\Models\CarCertified;
@@ -16,13 +17,124 @@ use App\Models\RelationCarMechanicalIssue;
 use App\Models\RelationCarModification;
 use App\Models\RelationCarOption;
 use App\Models\RelationCarWarningLight;
+use App\Models\User;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
+use Illuminate\Support\Facades\Validator;
 use PhpParser\Node\Expr\New_;
 
 class CarController extends Controller
 {
+    private $insertrules = [
+        'price' => 'numeric|required',
+        'discounttype' => 'numeric|required',
+        'discount' => 'numeric|required',
+        'make' => 'numeric|required',
+        'model' => 'numeric|required',
+        'year' => 'numeric|required',
+        'mileage' => 'numeric|required',
+        'color' => 'numeric|required',
+        'bodytypeid' => 'numeric|required',
+        'drivetrain' => 'numeric|required',
+        'transmission' => 'numeric|required',
+        'fueltypeid' => 'numeric|required',
+        'enginetypeid' => 'numeric|required',
+        'condition' => 'numeric|required',
+        'accident' => 'numeric|required',
+        'door' => 'numeric|required',
+        'vinnumber' => 'string|required',
+        'description' => 'string|required',
+    ];
+
+    private $updaterules = [
+        'priceEdit' => 'numeric|required',
+        'discounttypeEdit' => 'numeric|required',
+        'discountEdit' => 'numeric|required',
+        'makeEdit' => 'numeric|required',
+        'modelEdit' => 'numeric|required',
+        'yearEdit' => 'numeric|required',
+        'mileageEdit' => 'numeric|required',
+        'colorEdit' => 'numeric|required',
+        'bodytypeidEdit' => 'numeric|required',
+        'drivetrainEdit' => 'numeric|required',
+        'transmissionEdit' => 'numeric|required',
+        'fueltypeidEdit' => 'numeric|required',
+        'enginetypeidEdit' => 'numeric|required',
+        'conditionEdit' => 'numeric|required',
+        'accidentEdit' => 'numeric|required',
+        'doorEdit' => 'numeric|required',
+        'vinnumberEdit' => 'string|required',
+        'descriptionEdit' => 'string|required',
+    ];
+
+    private $searchrules = [
+        'PriceSearch' => 'string|max:50',
+        'MakeSearch' => 'numeric',
+        'ModelSearch' => 'numeric',
+        'YearSearch' => 'numeric',
+        'MileageSearch' => 'numeric',
+        'ConditionSearch' => 'numeric',
+        'BodyTypeSearch' => 'numeric',
+        'DriveTrainSearch' => 'numeric',
+        'TransmissionSearch' => 'numeric',
+        'FuelTypeSearch' => 'numeric',
+        'AccidentSearch' => 'numeric',
+        'AuctionFlagSearch' => 'numeric',
+        'ListedDateSearch' => 'date',
+        'KeyWordSearch' => 'string|max:30',
+    ];
+
+    private function changeErrorMessage (array $errors){
+        $message = array();
+        foreach ($errors as $model_error) {
+            foreach ($model_error as $error) {
+                switch ($error) {
+                    case 'The title must be a string.':
+                        $message[] = "عنوان باید در قالب حروف وارد شود.";
+                        break;
+                    case 'The title field is required.':
+                        $message[] = "وارد نمودن عنوان الزامی است.";
+                        break;
+                    case 'The title must not be greater than 50 characters.':
+                        $message[] = "تعداد حروف عنوان نباید بیشتر از ۵۰ کاراکتر باشد.";
+                        break;
+                    case 'The city id must be a number.':
+                        $message[] = "شهر باید در قالب عدد وارد شود.";
+                        break;
+                    case 'The city id field is required.':
+                        $message[] = "وارد نمودن شهر الزامی است.";
+                        break;
+                    case 'The title edit field is required.':
+                        $message[] = "وارد نمودن عنوان الزامی است.";
+                        break;
+                    case 'The title edit must be a string.':
+                        $message[] = "عنوان باید در قالب حروف وارد شود.";
+                        break;
+                    case 'The title edit must not be greater than 50 characters.':
+                        $message[] = "تعداد حروف عنوان نباید بیشتر از ۵۰ کاراکتر باشد.";
+                        break;
+                    case 'The city edit id must be a number.':
+                        $message[] = "شهر باید در قالب عدد وارد شود.";
+                        break;
+                    case 'The city edit id field is required.':
+                        $message[] = "وارد نمودن شهر الزامی است.";
+                        break;
+                    case 'The title search edit must be a string.':
+                        $message[] = "عنوان باید در قالب حروف وارد شود.";
+                        break;
+                    case 'The title search must not be greater than 20 characters.':
+                        $message[] = "تعداد حروف عنوان نباید بیشتر از ۲۰ کاراکتر باشد.";
+                        break;
+                    case 'The city id search must be a number.':
+                        $message[] = "شهر باید در قالب عدد وارد شود.";
+                        break;
+                }
+            }
+        }
+        return $message;
+    }
+
     public function GetCars() {
         try {
             //$cars = Car::whereActive(1)->get();
@@ -72,6 +184,43 @@ class CarController extends Controller
 
     public function InsertCar(Request $request) {
         try {
+            $validation_message = array();
+            $validation = Validator::make($request->all(),$this->insertrules);
+            if ($validation->fails()) {
+                foreach ($validation->errors()->getMessages() as $message) {
+                    $validation_message[] = $message;
+                }
+            }
+
+            if ($validation_message != []) {
+                return response(["status" => 400, "message" => $validation_message]);
+            }
+
+            if ($request->input('auction') == 1) {
+                $payflag = 0;
+                $payPrice = ActionCost::where('title','like','example')->first();
+                if($request->input('paytype') == 1) {
+                    //creditcard pay
+
+                    $payflag = 1;
+                }
+                elseif($request->input('paytype') == 2) {
+                    //carpager pay
+                    if (Auth::user()->wallet >= $payPrice->usercost) {
+                        $newWallet = Auth::user()->wallet - $payPrice->usercost;
+                        User::where('id',Auth::user()->id)->update(["wallet" => $newWallet]);
+                        $payflag = 1;
+                    }
+                    else {
+                        return response(["status" => 400, "message" => "Wallet Not Enough !!"]);
+                    }
+                }
+
+                if ($payflag == 0) {
+                    return response(["status" => 400, "message" => "Payment Failed !!"]);
+                }
+            }
+
             $userId = Auth::user()->id;
             $car = new Car();
 
@@ -388,6 +537,18 @@ class CarController extends Controller
 
     public function UpdateCar(Request $request) {
         try {
+            $validation_message = array();
+            $validation = Validator::make($request->all(),$this->updaterules);
+            if ($validation->fails()) {
+                foreach ($validation->errors()->getMessages() as $message) {
+                    $validation_message[] = $message;
+                }
+            }
+
+            if ($validation_message != []) {
+                return response(["status" => 400, "message" => $validation_message]);
+            }
+
             $carId = $request->input('carId');
 
             $car = Car::whereId($carId)->first();
@@ -683,6 +844,79 @@ class CarController extends Controller
             else {
                 return response(["status" => 400, "message" => "Car In Auction, You Cant Change Active Status"]);
             }
+        }
+        catch (\Exception $e) {
+            return response(["status" => 400, "message" => $e->getMessage()]);
+        }
+    }
+
+    public function SearchCar(Request $request) {
+        try {
+            $validation_message = array();
+            $validation = Validator::make($request->all(),$this->searchrules);
+            if ($validation->fails()) {
+                foreach ($validation->errors()->getMessages() as $message) {
+                    $validation_message[] = $message;
+                }
+            }
+
+            if ($validation_message != []) {
+                return response(["status" => 400, "message" => $validation_message]);
+            }
+
+            $cars = Car::where('active',1)->orderBy('id','DESC');
+            foreach ($request->all() as $key => $value){
+                if ($value != null){
+                    switch ($key) {
+                        case "PriceSearch":
+                            $value = explode("-",$value);
+                            $cars->where('price','>=',$value[0])->where('price','<=',$value[1]);
+                            break;
+                        case "MakeSearch":
+                            $cars->where('make','=',$value);
+                            break;
+                        case "ModelSearch":
+                            $cars->where('model','=',$value);
+                            break;
+                        case "YearSearch":
+                            $cars->where('year','>=',$value);
+                            break;
+                        case "MileageSearch":
+                            $cars->where('mileage','<=',$value);
+                            break;
+                        case "ConditionSearch":
+                            $cars->where('condition','=',$value);
+                            break;
+                        case "BodyTypeSearch":
+                            $cars->where('bodytypeid','=',$value);
+                            break;
+                        case "DriveTrainSearch":
+                            $cars->where('drivetrain','=',$value);
+                            break;
+                        case "TransmissionSearch":
+                            $cars->where('transmission','=',$value);
+                            break;
+                        case "FuelTypeSearch":
+                            $cars->where('fueltypeid','=',$value);
+                            break;
+                        case "AccidentSearch":
+                            $cars->where('accident','=',$value);
+                            break;
+                        case "AuctionFlagSearch":
+                            $cars->where('auction','=',$value);
+                            break;
+                        case "ListedDateSearch":
+                            $cars->where('created_at','>=',$value);
+                            break;
+                        case "KeyWordSearch":
+                            $cars->where('description','like',"%".$value."%");
+                            break;
+                    }
+                }
+            }
+            $cars = $cars->skip($request->input('skip'))->take($request->input('take'));
+
+            return response(["status" => 200, "message" => "Cars List !!", "data" => $cars]);
         }
         catch (\Exception $e) {
             return response(["status" => 400, "message" => $e->getMessage()]);
